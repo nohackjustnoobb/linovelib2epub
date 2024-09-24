@@ -1,8 +1,11 @@
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 from ebooklib import epub
 
 from scraper.utils import resp2image
+
+MAX_WORKERS = 10
 
 
 class Book:
@@ -13,6 +16,22 @@ class Book:
     authors: list[str] = []
     imgs: dict[str, str] = {}
     chapters: OrderedDict[str, list[str]] = {}
+
+    def __add_image(self, key, value, book, imgs_format):
+        resp = self.scraper.get_image(value)
+        if not resp.ok:
+            raise Exception(f"Failed to fetch image: {resp.status_code}")
+
+        bytes_, format_ = resp2image(resp)
+        imgs_format[f"{key}.format"] = f"{key}.{format_}"
+
+        img = epub.EpubImage(
+            uid=key,
+            file_name=f"static/{key}.{format_}",
+            media_type=f"image/{format_}",
+            content=bytes_,
+        )
+        book.add_item(img)
 
     def save(self):
         title = f"{self.novel_title} {self.vol_title}"
@@ -34,32 +53,32 @@ class Book:
         print("Fetching Cover...")
         if self.cover is not None:
             resp = self.scraper.get_image(self.cover)
-            book.set_cover(f"{self.vol_title}_cover.png", resp2image(resp))
+            bytes_, format_ = resp2image(resp)
+            book.set_cover(f"{self.vol_title}_cover.{format_}", bytes_)
+
+        imgs_format = {}
+        print("Fetching Images...")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [
+                executor.submit(self.__add_image, key, value, book, imgs_format)
+                for key, value in self.imgs.items()
+            ]
+
+            [future.result() for future in as_completed(futures)]
 
         print("Inserting Content...")
         for key, value in self.chapters.items():
+            flatten = "".join(value)
+            for old, new in imgs_format.items():
+                flatten = flatten.replace(old, new)
+
             chapter = epub.EpubHtml(title=key, file_name=f"{key}.xhtml")
             chapter.add_item(css)
-            chapter.set_content(f"<h1>{key}</h1>{''.join(value)}")
+            chapter.set_content(f"<h1>{key}</h1>{flatten}")
 
             book.add_item(chapter)
             book.toc.append(chapter)
             book.spine.append(chapter)
-
-        print("Fetching Images...")
-        # TODO asynchronously fetch all images
-        for key, value in self.imgs.items():
-            resp = self.scraper.get_image(value)
-            if not resp.ok:
-                raise Exception(f"Failed to fetch image: {resp.status_code}")
-
-            img = epub.EpubImage(
-                uid=key,
-                file_name=f"static/{key}.png",
-                media_type="image/png",
-                content=resp2image(resp),
-            )
-            book.add_item(img)
 
         book.add_item(epub.EpubNcx())
         book.add_item(epub.EpubNav())

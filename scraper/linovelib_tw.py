@@ -197,7 +197,7 @@ class linovelib_TW(Scraper):
                     filename = hashlib.md5(is_img.group(1).encode("utf-8")).hexdigest()
                     imgs[filename] = is_img.group(1)
 
-                    filtered_content.append(f'<img src="static/{filename}.png"/>')
+                    filtered_content.append(f'<img src="static/{filename}.format"/>')
 
                 book.chapters[title] = filtered_content
                 print(f"Fetched {title}")
