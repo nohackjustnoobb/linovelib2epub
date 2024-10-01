@@ -35,7 +35,7 @@ class Book:
 
     def save(self):
         title = f"{self.novel_title} {self.vol_title}"
-        print(f"Saving {title}")
+        print(f"[Saving] {title}")
 
         book = epub.EpubBook()
         book.set_title(title)
@@ -50,14 +50,14 @@ class Book:
         )
         book.add_item(css)
 
-        print("Fetching Cover...")
+        print("[Fetching] Cover")
         if self.cover is not None:
             resp = self.scraper.get_image(self.cover)
             bytes_, format_ = resp2image(resp)
             book.set_cover(f"{self.vol_title}_cover.{format_}", bytes_)
 
         imgs_format = {}
-        print("Fetching Images...")
+        print("[Fetching] Images")
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = [
                 executor.submit(self.__add_image, key, value, book, imgs_format)
@@ -66,7 +66,7 @@ class Book:
 
             [future.result() for future in as_completed(futures)]
 
-        print("Inserting Content...")
+        print("[Inserting] Content")
         for key, value in self.chapters.items():
             flatten = "".join(value)
             for old, new in imgs_format.items():
@@ -85,3 +85,4 @@ class Book:
 
         os.makedirs("outputs", exist_ok=True)
         epub.write_epub(f"outputs/{title}.epub", book=book)
+        print(f"[Saved] {title}.epub")

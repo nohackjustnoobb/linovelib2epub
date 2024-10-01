@@ -4,6 +4,8 @@ from models.models import Volume
 
 
 class Scraper:
+    name: str = None
+
     # Returns [Novel] instances
     @staticmethod
     def get(id: str | int):

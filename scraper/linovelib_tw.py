@@ -15,6 +15,7 @@ TIMEOUT = 1
 
 
 class linovelib_TW(Scraper):
+    name = "linovelib (TW)"
     base_url = "tw.linovelib.com"
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
@@ -96,7 +97,7 @@ class linovelib_TW(Scraper):
 
     @staticmethod
     def get_book(id: str | int, volume: Volume) -> Book:
-        print(f"Getting {volume.title}")
+        print(f"[Fetching] {volume.title}")
 
         session = requests.Session()
         session.cookies.set("night", "0")
@@ -108,6 +109,7 @@ class linovelib_TW(Scraper):
         book.chapters = {}
 
         next_id = volume.chapters[0].id
+        index = 0
 
         vol_title = None
         imgs = {}
@@ -120,19 +122,20 @@ class linovelib_TW(Scraper):
 
             # Get all pages of a chapter
             while retries <= MAX_RETRIES:
-                path = str(next_id) + (f"_{next_page}" if next_page is not None else "")
-                print(f"Fetching {path}")
+                print(
+                    f"[Fetching] {volume.chapters[index].title}{f' Page {next_page}' if next_page is not None else ''}"
+                )
 
                 # Fetch the chapter
                 resp = session.get(
-                    f"https://{linovelib_TW.base_url}/novel/{id}/{path}.html",
+                    f"https://{linovelib_TW.base_url}/novel/{id}/{next_id}{f'_{next_page}' if next_page is not None else ''}.html",
                     headers=linovelib_TW.headers,
                 )
                 sleep(TIMEOUT)
 
                 if not resp.ok:
                     retries += 1
-                    print(f"Error: {resp.status_code}")
+                    print(f"[Error] {resp.status_code}")
                     continue
                 else:
                     retries = 0
@@ -143,29 +146,16 @@ class linovelib_TW(Scraper):
                 if title is None:
                     title = soup.find("h1", id="atitle").text
 
-                # check if this is different volume
-                this_vol_title = soup.find("div", class_="atitle").find("h3").text
-                if vol_title is None:
-                    vol_title = this_vol_title
-                elif vol_title != this_vol_title:
-                    next_id = None
-                    break
-
                 for i in soup.find("div", id="acontent1").children:
                     if not i.name:
                         continue
 
                     if i.name == "center":
-                        print("Error: ")
-                        print(title)
-                        print(resp.url)
-                        print(i)
-                        exit(1)
+                        raise Exception(f"Failed to load {title} ({resp.url})")
                     elif i.name != "div":
                         content.append(str(i))
 
                 # get the next page or chapter
-                # TODO handle when reaching the end
                 next_url = re.search(r"url_next:'/novel/.*?/(.*?)\.html'", resp.text)
 
                 if next_url is None:
@@ -175,15 +165,17 @@ class linovelib_TW(Scraper):
                 next_url = next_url.group(1)
                 page = re.search(r".*_(.*)", next_url)
                 if page is None:
-                    next_id = None if next_url == next_id else next_url
+                    next_id = (
+                        None
+                        if next_url == next_id or title == volume.chapters[-1].title
+                        else next_url
+                    )
                     break
 
                 next_page = page.group(1)
 
-            # TODO debug only
-            # next_id = None
-
             filtered_content = []
+            index += 1
             if len(content) != 0:
                 for i in content:
                     is_img = re.search(r"<img.*data-src=\"(.*?)\".*/>", i) or re.search(
@@ -200,11 +192,10 @@ class linovelib_TW(Scraper):
                     filtered_content.append(f'<img src="static/{filename}.format"/>')
 
                 book.chapters[title] = filtered_content
-                print(f"Fetched {title}")
 
         book.imgs = imgs
 
-        print(f"Finished {volume.title}")
+        print(f"[Finished] {volume.title}")
 
         return book
 

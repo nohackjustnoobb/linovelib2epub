@@ -31,11 +31,13 @@ class Novel:
     def get_content(self, volumes: list[Volume], save: bool = True) -> list[Book]:
         assert self.scraper is not None
 
-        result = self.scraper.get_books(self.id, volumes)
-
-        for book in result:
+        result = []
+        for i in volumes:
+            book = self.scraper.get_books(self.id, [i])[0]
             book.novel_title = self.title
             book.authors = self.authors
+
+            result.append(book)
 
             if save:
                 book.save()
@@ -49,4 +51,4 @@ class Novel:
         for i in self.catalog:
             result.append(self.get_content([i], save)[0])
 
-        return result
+        return self.get_content(self.catalog, save)

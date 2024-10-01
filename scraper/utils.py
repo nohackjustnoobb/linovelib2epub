@@ -11,3 +11,7 @@ def resp2image(resp):
         return (png_image.getvalue(), "png")
 
     return (resp.content, img.format.lower())
+
+
+class Progress:
+    pass
