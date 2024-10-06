@@ -1,6 +1,8 @@
+from typing import Callable
 import requests
 from models.book import Book
-from models.models import Volume
+from models.novel import Volume
+from models.progress import Progress
 
 
 class Scraper:
@@ -16,8 +18,18 @@ class Scraper:
         pass
 
     @staticmethod
+    def get_book(
+        id: str | int,
+        volume: Volume,
+        progress_handler: Callable[[Progress], None],
+    ) -> Book:
+        pass
+
+    @staticmethod
     def get_books(
-        id: str | int, volumes: list[Volume], split: bool = True
+        id: str | int,
+        volumes: list[Volume],
+        progress_handler: Callable[[Progress], None],
     ) -> list[Book]:
         pass
 

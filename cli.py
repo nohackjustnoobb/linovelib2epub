@@ -1,7 +1,7 @@
 import inquirer
 
 
-from models.models import Novel
+from models.novel import Novel
 from models.scraper import Scraper
 from scraper.linovelib_tw import linovelib_TW
 
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     answer = inquirer.prompt(question)
 
     if answer["confirm"]:
-        novel.get_all_content()
+        novel.get_all_contents()
     else:
         questions = [
             inquirer.Checkbox(
@@ -68,4 +68,4 @@ if __name__ == "__main__":
         ]
 
         answer = inquirer.prompt(questions)
-        novel.get_content(answer["volume"])
+        novel.get_contents(answer["volume"])

@@ -1,11 +1,12 @@
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
+from typing import Callable
 from ebooklib import epub
 
-from scraper.utils import resp2image
-
-MAX_WORKERS = 10
+from models.progress import Progress, Status, default_progress_handler
+from utils.constants import MAX_WORKERS
+from utils.utils import resp2image
 
 
 class Book:
@@ -16,6 +17,10 @@ class Book:
     authors: list[str] = []
     imgs: dict[str, str] = {}
     chapters: OrderedDict[str, list[str]] = {}
+
+    progress_handler: Callable[[Progress], None] = staticmethod(
+        default_progress_handler
+    )
 
     def __add_image(self, key, value, book, imgs_format):
         resp = self.scraper.get_image(value)
@@ -33,9 +38,12 @@ class Book:
         )
         book.add_item(img)
 
-    def save(self):
+    def save(self, progress_handler: Callable[[Progress], None] = None):
+        if progress_handler is None:
+            progress_handler = self.progress_handler
+
         title = f"{self.novel_title} {self.vol_title}"
-        print(f"[Saving] {title}")
+        progress_handler(Progress(status=Status.SAVING, title=title))
 
         book = epub.EpubBook()
         book.set_title(title)
@@ -50,14 +58,14 @@ class Book:
         )
         book.add_item(css)
 
-        print("[Fetching] Cover")
+        progress_handler(Progress(status=Status.FETCHING, title="Cover"))
         if self.cover is not None:
             resp = self.scraper.get_image(self.cover)
             bytes_, format_ = resp2image(resp)
             book.set_cover(f"{self.vol_title}_cover.{format_}", bytes_)
 
         imgs_format = {}
-        print("[Fetching] Images")
+        progress_handler(Progress(status=Status.FETCHING, title="Images"))
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = [
                 executor.submit(self.__add_image, key, value, book, imgs_format)
@@ -66,7 +74,7 @@ class Book:
 
             [future.result() for future in as_completed(futures)]
 
-        print("[Inserting] Content")
+        progress_handler(Progress(status=Status.INSERTING, title="Content"))
         for key, value in self.chapters.items():
             flatten = "".join(value)
             for old, new in imgs_format.items():
@@ -85,4 +93,4 @@ class Book:
 
         os.makedirs("outputs", exist_ok=True)
         epub.write_epub(f"outputs/{title}.epub", book=book)
-        print(f"[Saved] {title}.epub")
+        progress_handler(Progress(status=Status.SAVED, title=f"{title}.epub"))

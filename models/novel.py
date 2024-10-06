@@ -1,4 +1,6 @@
+from typing import Callable
 from models.book import Book
+from models.progress import Progress, default_progress_handler
 
 
 class Chapter:
@@ -24,18 +26,23 @@ class Novel:
     latest: str = None
     catalog: list[Volume] | None = None
 
+    progress_handler: Callable[[Progress], None] = staticmethod(
+        default_progress_handler
+    )
+
     def get_catalog(self) -> None:
         assert self.scraper is not None
         self.catalog = self.scraper.get_catalog(self.id)
 
-    def get_content(self, volumes: list[Volume], save: bool = True) -> list[Book]:
+    def get_contents(self, volumes: list[Volume], save: bool = True) -> list[Book]:
         assert self.scraper is not None
 
         result = []
         for i in volumes:
-            book = self.scraper.get_books(self.id, [i])[0]
+            book = self.scraper.get_book(self.id, i, self.progress_handler)
             book.novel_title = self.title
             book.authors = self.authors
+            book.progress_handler = self.progress_handler
 
             result.append(book)
 
@@ -44,11 +51,7 @@ class Novel:
 
         return result
 
-    def get_all_content(self, save: bool = True) -> list[Book]:
+    def get_all_contents(self, save: bool = True) -> list[Book]:
         assert self.catalog is not None
 
-        result = []
-        for i in self.catalog:
-            result.append(self.get_content([i], save)[0])
-
-        return self.get_content(self.catalog, save)
+        return self.get_contents(self.catalog, save)

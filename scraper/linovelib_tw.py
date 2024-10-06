@@ -2,15 +2,16 @@ from datetime import datetime
 import hashlib
 import re
 from time import sleep
+from typing import Callable
 from bs4 import BeautifulSoup
 import requests
 import requests.sessions
 from models.book import Book
-from models.models import Chapter, Novel, Volume
+from models.novel import Chapter, Novel, Volume
+from models.progress import Progress, Status, default_progress_handler
 from models.scraper import Scraper
+from utils.constants import MAX_RETRIES
 
-
-MAX_RETRIES = 10
 TIMEOUT = 1
 
 
@@ -96,8 +97,12 @@ class linovelib_TW(Scraper):
         return result
 
     @staticmethod
-    def get_book(id: str | int, volume: Volume) -> Book:
-        print(f"[Fetching] {volume.title}")
+    def get_book(
+        id: str | int,
+        volume: Volume,
+        progress_handler: Callable[[Progress], None] = default_progress_handler,
+    ) -> Book:
+        progress_handler(Progress(status=Status.FETCHING, title=volume.title))
 
         session = requests.Session()
         session.cookies.set("night", "0")
@@ -111,7 +116,6 @@ class linovelib_TW(Scraper):
         next_id = volume.chapters[0].id
         index = 0
 
-        vol_title = None
         imgs = {}
 
         while next_id is not None:
@@ -122,8 +126,14 @@ class linovelib_TW(Scraper):
 
             # Get all pages of a chapter
             while retries <= MAX_RETRIES:
-                print(
-                    f"[Fetching] {volume.chapters[index].title}{f' Page {next_page}' if next_page is not None else ''}"
+                progress_handler(
+                    Progress(
+                        status=Status.FETCHING,
+                        title=volume.chapters[index].title,
+                        page=next_page,
+                        current=index + 1,
+                        total=len(volume.chapters),
+                    )
                 )
 
                 # Fetch the chapter
@@ -135,7 +145,9 @@ class linovelib_TW(Scraper):
 
                 if not resp.ok:
                     retries += 1
-                    print(f"[Error] {resp.status_code}")
+                    progress_handler(
+                        Progress(status=Status.ERROR, title=resp.status_code)
+                    )
                     continue
                 else:
                     retries = 0
@@ -195,13 +207,17 @@ class linovelib_TW(Scraper):
 
         book.imgs = imgs
 
-        print(f"[Finished] {volume.title}")
+        progress_handler(Progress(status=Status.FINISHED, title=volume.title))
 
         return book
 
     @staticmethod
-    def get_books(id: str | int, volumes: list[Volume]) -> list[Book]:
-        result = [linovelib_TW.get_book(id, v) for v in volumes]
+    def get_books(
+        id: str | int,
+        volumes: list[Volume],
+        progress_handler: Callable[[Progress], None] = default_progress_handler,
+    ) -> list[Book]:
+        result = [linovelib_TW.get_book(id, v, progress_handler) for v in volumes]
 
         return result
 
